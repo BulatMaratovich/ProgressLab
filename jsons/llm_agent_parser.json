@@ -1,0 +1,2032 @@
+{
+  "name": "ОБРАБОТКА СООБЩЕНИЙ В ГРУППЕ",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2272,
+        48
+      ],
+      "id": "f3dfa175-aac2-4d7e-b5d5-dba925a4a586",
+      "name": "Telegram Trigger",
+      "webhookId": "093c198b-87ba-4db4-81d6-c608d1a645f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "ORgEnpRvUguh7BWL",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Маркеры для разных типов сообщений\nconst STATUS_MARKERS = ['#статус', '/status', '#status', '/статус'];\nconst QUESTION_MARKERS = ['#вопрос','/вопрос', '/help'];\nconst ARTIFACT_MARKERS = ['#результат', '/done'];\n\n// Проходим по всем входящим сообщениям\nreturn items.map(item => {\n  const msg = item.json.message || item.json; // зависит от формата Telegram Trigger\n  const text = (msg.text || '').trim();\n  const lower = text.toLowerCase();\n\n  let kind = 'other';\n\n  // Проверяем префиксы\n  if (STATUS_MARKERS.some(m => lower.startsWith(m))) {\n    kind = 'status';\n  } else if (QUESTION_MARKERS.some(m => lower.startsWith(m))) {\n    kind = 'question';\n  } else if (ARTIFACT_MARKERS.some(m => lower.startsWith(m))) {\n    kind = 'artifact';\n  }\n\n  // Проверяем, является ли это ответом (reply) на сообщение бота\n  const reply = msg.reply_to_message;\n  const isReplyToBot = !!(reply && reply.from && reply.from.is_bot);\n\n  // Можно ещё вырезать сам маркер из текста, чтобы LLM видел только суть\n  let pureText = text;\n  if (kind !== 'other') {\n    const parts = text.split(/\\s+/);\n    parts.shift(); // убираем первый токен (#статус / #вопрос / #результат)\n    pureText = parts.join(' ').trim();\n  }\n\n  return {\n    json: {\n      kind,                 // status | question | artifact | other\n      isReplyToBot,         // true, если это реплай на сообщение бота\n      raw_text: text,       // исходный текст\n      text: pureText,       // текст без маркера\n      chat: msg.chat,       // пригодится для chat_id\n      from: msg.from,       // информация о студенте\n      original: msg         // весь оригинальный объект на всякий случай\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2032,
+        48
+      ],
+      "id": "b7df896d-02bd-45c7-88c3-6384a0412f3b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"kind\"] }}\n",
+                    "rightValue": "=status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "531d6687-b131-4ffb-a14c-2a89e498ee22"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4cebe6c2-68c6-46f5-8210-f831e13c6bf3",
+                    "leftValue": "={{ $json[\"kind\"] }}",
+                    "rightValue": "question",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8b6114df-ed88-4ed0-9c74-417cdaf12894",
+                    "leftValue": "={{ $json[\"kind\"] }}",
+                    "rightValue": "artifact",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4dc44921-14d5-40f7-ae2a-99e027a7eced",
+                    "leftValue": "={{ $json[\"kind\"] }}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1856,
+        16
+      ],
+      "id": "98776f6f-ef05-4763-a02c-f0e235de358c",
+      "name": "Switch",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Это сообщение студента о статусе:\n\n\"{{ $json.text }}\"\n\nРазбери его по полям и верни JSON такого вида:\n{\n  \"status_summary\": string,\n  \"risk_level\": \"low\" | \"medium\" | \"high\" | \"unknown\",\n  \"tasks\": [\n    {\n      \"title\": string,\n      \"status\": \"todo\" | \"in_progress\" | \"done\",\n      \"deadline\": string | null\n    }\n  ]\n}\n\nПомни правила выше. Если нет конкретных задач и сроков, верни \"tasks\": [] и \"risk_level\": \"unknown\".\nНе добавляй ни одной задачи, которая явно не описана в тексте.\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты инструмент для ПАРСИНГА статусов студентов по проекту.  ТВОИ ЖЁСТКИЕ ПРАВИЛА: 1. НИКОГДА не придумывай задачи, этапы, дедлайны или риски. 2. Используй ТОЛЬКО ту информацию, которая ЯВНО указана в сообщении студента. 3. Если в сообщении почти нет информации (типа \"тест\", \"ок\", \"сделаю\", пустой текст),    то:    - \"status_summary\": \"\" (пустая строка)    - \"risk_level\": \"unknown\"    - \"tasks\": [] (пустой массив)  Всегда отвечай СТРОГО JSON-ом без пояснений, комментариев и текста вокруг."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1552,
+        -320
+      ],
+      "id": "4273b4b5-45e0-44a2-8a17-69f210a63073",
+      "name": "Basic LLM Chain",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": "open-mistral-nemo-2407",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -1552,
+        -144
+      ],
+      "id": "5c7bdbac-fc1f-40da-a97a-f8dbbc93e9cb",
+      "name": "Mistral Cloud Chat Model",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "OZhFajjFkYUh8T8E",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// raw — то, что вернул Basic LLM Chain\n// ВАЖНО: \"completion\" должно совпадать с Output Key в ноде LLM\nlet text =\n  $json.completion || // <- главное поле\n  $json.text ||\n  $json.output ||\n  JSON.stringify($json);\n\ntext = text.trim();\n\n// на случай, если модель вернула ```json ... ```\nif (text.startsWith('```')) {\n  text = text\n    .replace(/^```[a-zA-Z]*\\n/, '')\n    .replace(/```$/, '')\n    .trim();\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  throw new Error(\n    'Не удалось разобрать JSON от LLM: ' +\n      e.message +\n      '\\nТекст: ' +\n      text.slice(0, 300)\n  );\n}\n\n// ВАЖНО: для Code node v2 надо вернуть МАССИВ items\nreturn [\n  {\n    json: {\n      status_summary: parsed.status_summary,\n      risk_level: parsed.risk_level,\n      tasks: parsed.tasks || [],\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        -320
+      ],
+      "id": "b4ed6298-d77c-4e54-a514-3c58ae71dfd3",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "model": "open-mistral-nemo-2407",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -1552,
+        208
+      ],
+      "id": "65b9ba57-762a-4800-98ad-f3697931ecde",
+      "name": "Mistral Cloud Chat Model1",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "OZhFajjFkYUh8T8E",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "open-mistral-nemo-2407",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        -1552,
+        528
+      ],
+      "id": "f7ee8bb4-1169-40b9-8365-bf5b7bc6216f",
+      "name": "Mistral Cloud Chat Model2",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "OZhFajjFkYUh8T8E",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Это ВОПРОС студента по учебному проекту:\n\n\"{{ $json.text }}\"\n\nПроанализируй этот вопрос и верни JSON СТРОГО по схеме из system prompt.\nНе добавляй никакого дополнительного текста, комментариев или Markdown.\nТолько один JSON-объект.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты ассистент преподавателя, который помогает разбирать ВОПРОСЫ студентов по учебным проектам.\n\nТвоя задача — прочитать текст вопроса и структурировать его в JSON с точки зрения:\n\nо чём вопрос (краткое резюме),\n\nк какой теме проекта он относится,\n\nнасколько вопрос срочный,\n\nнужна ли отдельная консультация с преподавателем,\n\nесли да — какая ТЕМА консультации (человеческий заголовок),\n\nпочему нужна консультация и к какому сроку лучше решить вопрос.\n\nВСЕГДА возвращай СТРОГО JSON без форматирования Markdown, без комментариев и текста вокруг.\nНикаких json и — только один JSON-объект.\n\nСхема JSON ДОЛЖНА быть ровно такой:\n\n{\n\"question_summary\": string,\n\"consultation_title\": string,\n\"topic\": \"frontend\" | \"backend\" | \"security\" | \"devops\" | \"architecture\" | \"management\" | \"other\",\n\"urgency\": \"low\" | \"medium\" | \"high\",\n\"needs_consultation\": true | false,\n\"reason_for_consultation\": string,\n\"suggested_deadline\": string | null\n}\n\nПояснения:\n\n\"question_summary\": коротко и по-русски перескажи суть вопроса (1–2 предложения). Можно нейтрально.\n\n\"consultation_title\": короткая тема консультации (5–10 слов) как заголовок встречи.\nПравила:\n\nНЕ используй слова \"студенты\", \"команда не может\", \"спрашивают\", \"нужна консультация\", \"вопрос\".\n\nФормулируй как предмет обсуждения, желательно с термином/технологией.\n\nПримеры хороших тем:\n\n\"Хранение JWT: httpOnly cookies vs localStorage\"\n\n\"Выбор стратегии refresh/access токенов\"\n\n\"Роли и права доступа в веб-приложении\"\n\nЕсли needs_consultation = false, всё равно заполни consultation_title коротко по теме (пригодится для логов).\n\n\"topic\": выбери ОДНО значение из списка:\n\n\"frontend\" — верстка, React/Vue, UI, DOM.\n\n\"backend\" — серверная логика, БД, API (без явного упора на безопасность).\n\n\"security\" — авторизация, аутентификация, токены, шифрование, уязвимости, права доступа.\n\n\"devops\" — деплой, CI/CD, Docker, серверы.\n\n\"architecture\" — архитектура, модули, взаимодействие компонентов.\n\n\"management\" — организация работы, сроки, роли.\n\n\"other\" — если ничего не подходит.\n\n\"urgency\":\n\n\"high\" — скоро дедлайн / блокируется ключевая часть / явно “срочно”.\n\n\"medium\" — важно, но без признака критического дедлайна.\n\n\"low\" — уточнения, можно обсудить позже.\n\n\"needs_consultation\":\n\ntrue — если студент сам не может принять решение, явно просит созвон, или риск высок (security/architecture).\n\nfalse — если можно закрыть стандартным ответом/ссылкой без созвона.\n\n\"reason_for_consultation\": 1 короткое предложение, зачем нужна консультация (или почему не нужна).\n\n\"suggested_deadline\": если в тексте есть явный срок — укажи \"YYYY-MM-DD\", иначе null.\n\nНе придумывай факты и даты, которых нет в тексте. Если срок не указан — suggested_deadline = null."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1552,
+        32
+      ],
+      "id": "5477d27d-c8bf-4ea0-a818-0bc049fef485",
+      "name": "Basic LLM Chain1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Это сообщение студента с результатом (#результат):\n\n\"{{ $json.text }}\"\n\nРазбери и верни JSON строго по схеме из system prompt.\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты инструмент для ПАРСИНГА результатов/артефактов студентов по проекту. ЖЁСТКИЕ ПРАВИЛА:  НИКОГДА не выдумывай ссылки, стадии, описания или теги — только то, что явно есть в тексте.  Всегда возвращай СТРОГО один JSON-объект без Markdown и пояснений.  Если какого-то поля нет — верни null (или пустой массив для links/tags).  Схема ответа:  {   \"artifact_type\": \"backend\" | \"frontend\" | \"docs\" | \"devops\" | \"other\",   \"stage\": \"draft\" | \"in_progress\" | \"final\" | \"unknown\",   \"short_description\": string,   \"needs_review\": true | false,   \"links\": [string],   \"tags\": [string] }"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1552,
+        352
+      ],
+      "id": "25f1afe9-899a-467d-8749-195b3ec3af6a",
+      "name": "Basic LLM Chain2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Этот код:\n// 1) Берёт JSON-строку из item.json.text (выход LLM),\n// 2) Парсит её,\n// 3) Добавляет служебные поля: original_text, telegram_user_id, chat_id,\n// 4) Возвращает нормальный json для дальнейшей работы (Google Sheets и т.д.).\n\n// ВСЕ items от LLM\nconst llmItems = $input.all();\n\n// ВСЕ items, которые шли НА вход в LLM (узел до LLM)\nconst baseItems = $(\"Switch\").all();\n\nfunction extractJson(text) {\n  if (!text) return '{}';\n\n  let raw = text.trim();\n\n  // На всякий случай убираем ``` / ```json, если модель вдруг вернёт с оградителями\n  if (raw.startsWith('```')) {\n    const lines = raw.split('\\n');\n    if (lines.length > 1) {\n      lines.shift(); // убираем первую строку ``` или ```json\n      raw = lines.join('\\n');\n    }\n    // убираем закрывающий ```\n    raw = raw.replace(/```$/m, '').trim();\n  }\n\n  // Выделяем первый блок { ... } на случай лишнего текста\n  const firstBrace = raw.indexOf('{');\n  const lastBrace = raw.lastIndexOf('}');\n  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {\n    raw = raw.slice(firstBrace, lastBrace + 1);\n  }\n\n  return raw;\n}\n\nconst out = llmItems.map((item, index) => {\n  const llmText = item.json.text || '';\n  const jsonString = extractJson(llmText);\n\n  let parsed;\n  try {\n    parsed = JSON.parse(jsonString);\n  } catch (error) {\n    // Если не получилось распарсить, возвращаем поля как null и сохраняем ошибку\n    parsed = {\n      question_summary: null,\n      topic: null,\n      urgency: null,\n      needs_consultation: null,\n      reason_for_consultation: null,\n      suggested_deadline: null,\n      _parse_error: 'Ошибка JSON.parse: ' + error.message,\n      _bad_text: llmText\n    };\n  }\n\n  // Берём исходный item, который шёл на вход в LLM, по тому же индексу\n  const base = baseItems[index]?.json || {};\n\n  return {\n    json: {\n      // из LLM\n      question_summary: parsed.question_summary ?? null,\n      topic: parsed.topic ?? null,\n      urgency: parsed.urgency ?? 'medium',\n      needs_consultation: parsed.needs_consultation ?? false,\n      reason_for_consultation: parsed.reason_for_consultation ?? null,\n      suggested_deadline: parsed.suggested_deadline ?? null,\n      consultation_title: parsed.consultation_title ?? null,\n      // служебные поля из исходного сообщения\n      original_text: base.text || base.raw_text || null,\n      telegram_user_id: base.from?.id ?? null,\n      chat_id: base.chat?.id ?? null\n    }\n  };\n});\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1216,
+        32
+      ],
+      "id": "1bdd1ddf-2ed2-41ae-9613-5f40749dea6c",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Обрабатывает вывод Basic LLM Chain для #результат (artifact):\n// - снимает ```json\n// - парсит JSON\n// - нормализует поля\n// - добавляет служебные поля из исходного сообщения (chat_id, telegram_user_id, original_text)\n\nconst llmItems = $input.all();\nconst baseItems = $(\"Switch\").all();\n\nfunction extractJson(text) {\n  if (!text) return '{}';\n  let raw = String(text).trim();\n\n  // убрать ``` / ```json\n  if (raw.startsWith('```')) {\n    const lines = raw.split('\\n');\n    if (lines.length > 1) {\n      lines.shift();\n      raw = lines.join('\\n');\n    }\n    raw = raw.replace(/```$/m, '').trim();\n  }\n\n  // вырезать первый {...}\n  const firstBrace = raw.indexOf('{');\n  const lastBrace = raw.lastIndexOf('}');\n  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {\n    raw = raw.slice(firstBrace, lastBrace + 1);\n  }\n  return raw;\n}\n\nreturn llmItems.map((item, index) => {\n  // разные LLM-ноды могут класть текст в разные поля\n  const llmText =\n    item.json.text ??\n    item.json.completion ??\n    item.json.output ??\n    item.json.content ??\n    '';\n\n  const jsonString = extractJson(llmText);\n\n  let parsed;\n  try {\n    parsed = JSON.parse(jsonString);\n  } catch (error) {\n    parsed = {\n      artifact_type: 'other',\n      stage: 'unknown',\n      short_description: null,\n      needs_review: null,\n      links: [],\n      tags: [],\n      _parse_error: 'JSON.parse error: ' + error.message,\n      _bad_text: llmText,\n    };\n  }\n\n  const base = baseItems[index]?.json || {};\n\n  return {\n    json: {\n      artifact_type: parsed.artifact_type ?? 'other',\n      stage: parsed.stage ?? null,\n      short_description: parsed.short_description ?? null,\n      needs_review: parsed.needs_review ?? false,\n      links: Array.isArray(parsed.links) ? parsed.links : [],\n      tags: Array.isArray(parsed.tags) ? parsed.tags : [],\n\n      // служебные поля\n      original_text: base.text || base.raw_text || null,\n      telegram_user_id: base.from?.id ?? null,\n      chat_id: base.chat?.id ?? null,\n\n      // отладка (можно потом убрать)\n      _raw_llm: llmText,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1184,
+        352
+      ],
+      "id": "d9e60e0f-4637-4529-a5a5-72a743a64759",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// На входе один item с полями status_summary, risk_level и массивом tasks.\nconst { status_summary, risk_level, tasks } = $json;\n\n// Если tasks нет или это не массив — просто ничего не возвращаем.\nif (!Array.isArray(tasks)) {\n  return [];\n}\n\n// Возвращаем по одному item на каждую задачу.\nconst outputItems = tasks.map(task => {\n  return {\n    json: {\n      title: task.title,\n      status: task.status,\n      deadline: task.deadline,\n      status_summary,\n      risk_level,\n    },\n  };\n});\n\nreturn outputItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        -320
+      ],
+      "id": "0a0713ff-b36e-4832-a69d-fc0cce5f53ae",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1080613179,
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1080613179"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ $now.toMillis() }}",
+            "title": "={{ $json[\"title\"] }}",
+            "status": "={{ $json[\"status\"] }}",
+            "deadline": "={{ $json[\"deadline\"] }}",
+            "source": "status_message",
+            "description": "={{ $json[\"status_summary\"] }}",
+            "created_at": "={{ $now }}",
+            "updated_at": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_id",
+              "displayName": "student_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -816,
+        -320
+      ],
+      "id": "ee17570c-8b41-4148-ab33-1d6eca3af53c",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 135425569,
+          "mode": "list",
+          "cachedResultName": "students",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=135425569"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "telegram_user_id",
+              "lookupValue": "={{ $json[\"telegram_user_id\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1024,
+        32
+      ],
+      "id": "7affa0d4-5637-4f0b-83f3-4acb62e478e0",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1080613179,
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1080613179"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ $now.toMillis() }}",
+            "title": "={{ $node[\"Code in JavaScript2\"].json[\"question_summary\"] }}",
+            "status": "=open",
+            "deadline": "={{ $node[\"Code in JavaScript2\"].json[\"suggested_deadline\"] || \"\" }}",
+            "source": "question",
+            "description": "={{ $node[\"Code in JavaScript2\"].json[\"original_text\"] }}",
+            "created_at": "={{ $now }}",
+            "updated_at": "={{ $now }}",
+            "team_id": "={{ $json[\"team_id\"] }}",
+            "student_id": "={{ $json[\"student_id\"] }}",
+            "priority": "={{ $node[\"Code in JavaScript2\"].json[\"urgency\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_id",
+              "displayName": "student_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -816,
+        32
+      ],
+      "id": "d97f1a31-f4e5-4361-a354-7d369317c088",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "073c6d1e-c986-4acf-9991-c73309ec572c",
+              "leftValue": "={{$node[\"Code in JavaScript2\"].json[\"needs_consultation\"]}}",
+              "rightValue": "itrue",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        32
+      ],
+      "id": "7f22d230-ef02-408b-ac15-16820c3b8f6f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1530255645,
+          "mode": "list",
+          "cachedResultName": "slots",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1530255645"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "is_free",
+              "lookupValue": "=true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -400,
+        -128
+      ],
+      "id": "dc2755df-ff86-4573-bbac-3060115efe4b",
+      "name": "Get row(s) in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const slots = $input.all().map(i => i.json);\n\n// берём только свободные\nconst free = slots.filter(s => String(s.is_free).toLowerCase() === 'true' || s.is_free === true);\n\nif (free.length === 0) {\n  throw new Error('Нет свободных слотов в таблице slots');\n}\n\n// сортируем по datetime (ВАЖНО: datetime лучше хранить в ISO: 2025-12-17T15:00:00)\nfree.sort((a, b) => {\n  const da = new Date(a.datetime).getTime();\n  const db = new Date(b.datetime).getTime();\n  return da - db;\n});\n\nconst chosen = free[0];\n\n// подтягиваем team_id из Lookup students\nconst studentFirst = $(\"Get row(s) in sheet1\").first();\nif (!studentFirst) throw new Error(\"Студент не найден в students\");\nconst studentRow = studentFirst.json;\n\nconst qFirst = $(\"Code in JavaScript2\").first();\nif (!qFirst) throw new Error(\"Нет данных вопроса\");\nconst q = qFirst.json;\n\nreturn [{\n  json: {\n    slot_id: chosen.slot_id,\n    datetime: chosen.datetime,\n    team_id: studentRow.team_id,\n    question_summary: q.question_summary,\n    chat_id: q.chat_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -128
+      ],
+      "id": "4c4d9332-e5ba-4817-b455-54a4780f0cbf",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1530255645,
+          "mode": "list",
+          "cachedResultName": "slots",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1530255645"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": 0,
+            "slot_id": "={{ $json[\"slot_id\"] }}",
+            "is_free": "=false",
+            "team_id": "={{ $json[\"team_id\"] }}"
+          },
+          "matchingColumns": [
+            "slot_id"
+          ],
+          "schema": [
+            {
+              "id": "slot_id",
+              "displayName": "slot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "datetime",
+              "displayName": "datetime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "is_free",
+              "displayName": "is_free",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        32,
+        -128
+      ],
+      "id": "956ebdf0-24df-45a6-baac-1a9e1341fa20",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 208407612,
+          "mode": "list",
+          "cachedResultName": "consultations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=208407612"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "consultation_id": "={{ $now.toMillis() }}",
+            "team_id": "={{ $json[\"team_id\"] }}",
+            "datetime": "={{ $node[\"Code in JavaScript5\"].json[\"datetime\"] }}",
+            "status": "planned",
+            "comment": "={{ $node[\"Code in JavaScript5\"].json[\"consultation_title\"] }}",
+            "created_at": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "consultation_id",
+              "displayName": "consultation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "datetime",
+              "displayName": "datetime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comment",
+              "displayName": "comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        -128
+      ],
+      "id": "98f1d8bf-a0b3-4af8-9970-5aaddd4f3206",
+      "name": "Append row in sheet2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Code in JavaScript5\"].json[\"chat_id\"] }}",
+        "text": "=Записал на консультацию: {{ $node[\"Code in JavaScript5\"].json[\"datetime\"] }} Тема: {{ $node[\"Code in JavaScript2\"].json[\"topic\"] }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        -128
+      ],
+      "id": "9f27a72a-a819-428f-90e8-8fc84458561c",
+      "name": "Send a text message",
+      "webhookId": "34e1d84b-50d9-4749-b809-49d4fb34bfee",
+      "credentials": {
+        "telegramApi": {
+          "id": "ORgEnpRvUguh7BWL",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "teams",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $json.chat_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -992,
+        352
+      ],
+      "id": "e25c77df-d2fe-4aeb-923c-bd235f20ec5d",
+      "name": "Teams Lookup",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 135425569,
+          "mode": "list",
+          "cachedResultName": "students",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=135425569"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "telegram_user_id",
+              "lookupValue": "={{ $(\"Code in JavaScript3\").first().json.telegram_user_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -800,
+        352
+      ],
+      "id": "bdca8acf-fb81-4e87-b4bb-bfc150d4322a",
+      "name": "Students Lookup",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 208407612,
+          "mode": "list",
+          "cachedResultName": "consultations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=208407612"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "consultation_id": "={{ $now.toMillis() }}",
+            "team_id": "={{ $json[\"team_id\"] }}",
+            "datetime": "={{ $node[\"Code in JavaScript5\"].json[\"datetime\"] }}",
+            "status": "planned",
+            "comment": "={{ $node[\"Code in JavaScript5\"].json[\"consultation_title\"] }}",
+            "created_at": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "consultation_id",
+              "displayName": "consultation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "datetime",
+              "displayName": "datetime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comment",
+              "displayName": "comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -400,
+        160
+      ],
+      "id": "c650d956-cb2d-4e7b-9be4-2c44145b3e48",
+      "name": "Append row in sheet5",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d4c87026-ee00-4079-86ee-aa73e5563fe4",
+              "name": "student_id",
+              "value": "={{ $json.student_id }}",
+              "type": "number"
+            },
+            {
+              "id": "ada6e121-f545-4e77-82ba-07607425f02f",
+              "name": "name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "ea073467-873b-4cc9-ae68-61570a3fdaa6",
+              "name": "team_id",
+              "value": "={{ $('Teams Lookup').item.json.team_id }}",
+              "type": "number"
+            },
+            {
+              "id": "588235dd-6151-424d-96f1-270514994065",
+              "name": "team_name",
+              "value": "={{ $('Teams Lookup').item.json.team_name }}",
+              "type": "string"
+            },
+            {
+              "id": "e4192969-3480-4163-b71c-9d1fd4996d00",
+              "name": "artifact_type",
+              "value": "={{ $('Code in JavaScript3').item.json.artifact_type }}",
+              "type": "string"
+            },
+            {
+              "id": "97ecb3e8-5c53-44a9-95d1-c986d2f3fc1e",
+              "name": "stage",
+              "value": "={{ $('Code in JavaScript3').item.json.stage }}",
+              "type": "string"
+            },
+            {
+              "id": "ad104dd4-b610-4398-88c8-c093eab1f0d1",
+              "name": "short_description",
+              "value": "={{ $('Code in JavaScript3').item.json.short_description }}",
+              "type": "string"
+            },
+            {
+              "id": "72769b1a-01a2-4f3e-87f4-35278468f436",
+              "name": "needs_review",
+              "value": "={{ $('Code in JavaScript3').item.json.needs_review }}",
+              "type": "boolean"
+            },
+            {
+              "id": "13ed52b6-c801-4bf5-9140-332b945ced5d",
+              "name": "links",
+              "value": "={{ $('Code in JavaScript3').item.json.links }}",
+              "type": "array"
+            },
+            {
+              "id": "90092006-0f63-45b6-9f50-9f04e637a509",
+              "name": "tags",
+              "value": "={{ $('Code in JavaScript3').item.json.tags }}",
+              "type": "array"
+            },
+            {
+              "id": "408402eb-6dc9-4bd8-99b7-60bd161c955a",
+              "name": "original_text",
+              "value": "={{ $('Code in JavaScript3').item.json.original_text }}",
+              "type": "string"
+            },
+            {
+              "id": "780276d6-2f0d-4075-b97c-71add08d04e2",
+              "name": "lead_chat_id",
+              "value": "={{ $('Teams Lookup').item.json.lead_chat_id }}",
+              "type": "number"
+            },
+            {
+              "id": "a66b5fcf-c0cd-4054-8c72-d0a06f918bb0",
+              "name": "artifact_id",
+              "value": "={{$now.toMillis()}}",
+              "type": "string"
+            },
+            {
+              "id": "c2d851ab-a6e5-4e9d-b74a-b2f7e71ac9b2",
+              "name": "created_at",
+              "value": "={{$now.toISO()}}",
+              "type": "string"
+            },
+            {
+              "id": "f32477a9-4d7d-4282-b191-872b76347362",
+              "name": "telegram_user_id",
+              "value": "={{ $('Code in JavaScript3').item.json.telegram_user_id }}",
+              "type": "number"
+            },
+            {
+              "id": "41660761-abba-439c-84d7-4b772e9a968f",
+              "name": "chat_id_student",
+              "value": "={{ $('Code in JavaScript3').item.json.chat_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -608,
+        352
+      ],
+      "id": "75016a1f-23b7-449d-bfb9-2079b3a2b8f2",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1303809778,
+          "mode": "list",
+          "cachedResultName": "artifacts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1303809778"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "artifact_id",
+              "displayName": "artifact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "student_id",
+              "displayName": "student_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telegram_user_id",
+              "displayName": "telegram_user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "artifact_type",
+              "displayName": "artifact_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "short_description",
+              "displayName": "short_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "needs_review",
+              "displayName": "needs_review",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "links",
+              "displayName": "links",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "original_text",
+              "displayName": "original_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "team_name",
+              "displayName": "team_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tags",
+              "displayName": "tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_chat_id",
+              "displayName": "lead_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -400,
+        352
+      ],
+      "id": "644948c3-9594-4039-ad3b-c7cd2fc9f37d",
+      "name": "Append Artifact",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Code in JavaScript3\"].json[\"chat_id\"] }}",
+        "text": "=Принял результат ✅\nТип: {{$json[\"artifact_type\"]}}\nСтадия: {{$json[\"stage\"]}}\nОписание: {{$json[\"short_description\"]}}\nНа ревью: {{$json[\"needs_review\"] ? \"да\" : \"нет\"}}\nСсылки:\n{{$json[\"links\"] || \"-\"}}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        352
+      ],
+      "id": "4e22204b-22c0-4139-879e-1e901f6d4fb8",
+      "name": "Send a text message1",
+      "webhookId": "34e1d84b-50d9-4749-b809-49d4fb34bfee",
+      "credentials": {
+        "telegramApi": {
+          "id": "ORgEnpRvUguh7BWL",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "073c6d1e-c986-4acf-9991-c73309ec572c",
+              "leftValue": "={{ $('Append Artifact').item.json.needs_review }}",
+              "rightValue": "itrue",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        352
+      ],
+      "id": "c9129c15-bb19-4ebc-969a-a63593d247f4",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1080613179,
+          "mode": "list",
+          "cachedResultName": "tasks",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1080613179"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ \"rev_\" + $('Append Artifact').item.json.artifact_id }}",
+            "team_id": "={{ $('Append Artifact').item.json.team_id }}",
+            "student_id": "={{ $('Append Artifact').item.json.student_id }}",
+            "status": "open",
+            "title": "={{\"Ревью: \" + $('Append Artifact').item.json.short_description }}",
+            "source": "artifact_review",
+            "description": "=",
+            "updated_at": "={{$now}}",
+            "created_at": "={{$now}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "student_id",
+              "displayName": "student_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deadline",
+              "displayName": "deadline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_chat_id",
+              "displayName": "lead_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        336
+      ],
+      "id": "3365019f-486c-4594-870b-86d50c51dac9",
+      "name": "Append Artifact1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet2": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Teams Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Teams Lookup": {
+      "main": [
+        [
+          {
+            "node": "Students Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Students Lookup": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Append Artifact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Artifact": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Append Artifact1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5d004e13-f1a4-41ef-9c29-c52870c4366e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a63d642a7df8650546e6c6b13cf0cf149584650024e6049dfd4298614cd208f9"
+  },
+  "id": "red0lUBDd2SYsxCq",
+  "tags": []
+}
