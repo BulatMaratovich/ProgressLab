@@ -1,0 +1,729 @@
+{
+  "name": "Github checker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        -16
+      ],
+      "id": "2615a3ba-a560-4d51-8263-68ac3e692d33",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/commits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "since",
+              "value": "={{ $now.minus({ hours: 168 }).toISO() }}"
+            },
+            {
+              "name": "per_page",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -320,
+        -16
+      ],
+      "id": "09f9b3fe-c3db-4a70-aa1e-13e2112f1a43",
+      "name": "HTTP Request",
+      "alwaysOutputData": true,
+      "credentials": {
+        "githubOAuth2Api": {
+          "id": "zblfJU89Hl2chqWh",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// функция извлечения коммитов\nfunction extractCommits(json) {\n  if (Array.isArray(json)) return json;\n  if (json && Array.isArray(json.data)) return json.data;\n  if (json && Array.isArray(json.items)) return json.items;\n  if (json && json.commit) return [json];\n  return [];\n}\n\nreturn items.map(item => {\n  const teamId = item.json.team_id;        // ✅ берем из item\n  const github = item.json.github;         // ответ GitHub API\n\n  const commits = extractCommits(github);\n\n  let total_commits = 0;\n  let last_commit_date = null;\n  const authors = new Set();\n\n  for (const c of commits) {\n    total_commits += 1;\n\n    const authorName =\n      c?.commit?.author?.name ??\n      c?.commit?.committer?.name ??\n      c?.author?.login ??\n      null;\n\n    const dateStr =\n      c?.commit?.author?.date ??\n      c?.commit?.committer?.date ??\n      null;\n\n    if (authorName) authors.add(authorName);\n\n    if (dateStr) {\n      const d = new Date(dateStr);\n      const prev = last_commit_date ? new Date(last_commit_date) : null;\n      if (!prev || d > prev) last_commit_date = dateStr;\n    }\n  }\n\n  return {\n    json: {\n      team_id: teamId,\n      total_commits,\n      has_activity: total_commits > 0,\n      authors: Array.from(authors).join(', '),\n      last_commit_date,\n      status: total_commits > 0 ? 'active' : 'inactive',\n      repos_seen: 1,\n      errors: null,\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -16
+      ],
+      "id": "1a1124c9-eea3-465e-8add-5e48b7aeceaa",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "989282a7-e052-4315-b2d9-c5c1d4cf3b24",
+              "leftValue": "={{ $json.has_activity }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        -16
+      ],
+      "id": "943d17b2-0a7f-4404-a1f8-b48a3dce317c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1003003478,
+          "mode": "list",
+          "cachedResultName": "risk_history",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=1003003478"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "risk_id": "={{ $now.toMillis() }}",
+            "team_id": "={{ $('Code in JavaScript').item.json.team_id }}",
+            "risk_level": "high",
+            "source": "github_checker",
+            "comment": "=Нет коммитов за неделю в {{ $json.repo_owner }}/{{ $json.repo_name }}. Last: {{ $json.last_commit_date || \"none\" }}",
+            "created_at": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "risk_id",
+              "displayName": "risk_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_level",
+              "displayName": "risk_level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comment",
+              "displayName": "comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        528,
+        -112
+      ],
+      "id": "e9cdd91a-27eb-472d-874c-5b98b0abd414",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "teams",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "active",
+              "lookupValue": "={{'yes'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -512,
+        -16
+      ],
+      "id": "de6fefd3-89af-4b3f-9265-92def64358ba",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "teams",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "risk_level": "low",
+            "last_status_at": "={{ $now }}",
+            "notes": "=Commits={{ $json.total_commits }} Last={{ $json.last_commit_date }} Authors={{ $json.authors }}"
+          },
+          "matchingColumns": [
+            "last_status_at"
+          ],
+          "schema": [
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_name",
+              "displayName": "team_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_level",
+              "displayName": "risk_level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_status_at",
+              "displayName": "last_status_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_chat_id",
+              "displayName": "lead_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_url",
+              "displayName": "repo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_name",
+              "displayName": "repo_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_owner",
+              "displayName": "repo_owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        528,
+        64
+      ],
+      "id": "005a4d71-2ee7-4a8e-ab3a-038a53d07e1f",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// item.json сейчас содержит ответ GitHub API (массив коммитов/объект),\n// а входной item (из teams) доступен как $node[\"Get row(s) in sheet\"].json,\n// но проще: берём repo/team поля из текущего item ДО запроса.\n// В n8n HTTP Request обычно сохраняет исходные поля в item.json, если включено \"Include ...\",\n// но если нет — используем $items().\n\nconst base = $(\"Get row(s) in sheet\").all(); // имя узла из твоего workflow :contentReference[oaicite:4]{index=4}\n\nreturn items.map((it, idx) => {\n  const team = base[idx]?.json ?? {};\n  return {\n    json: {\n      team_id: team.team_id,\n      chat_id: team.chat_id,\n      repo_owner: team.repo_owner,\n      repo_name: team.repo_name,\n      github: it.json, // сюда кладём ответ API\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        -16
+      ],
+      "id": "bbc37f34-1bfb-4c8a-8a41-cdfcb04b67a4",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ",
+          "mode": "list",
+          "cachedResultName": "ProgressLab",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "teams",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1hrcyr_XGkgeZKbbvRfcExOGwdwYmrXmFopYodSm_HYQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "team_id": "={{ $('Code in JavaScript').item.json.team_id }}",
+            "risk_level": "high",
+            "last_status_at": "{{ $now }}",
+            "notes": "Commits={{total_commits}} Last={{last_commit_date}} Authors={{authors}}"
+          },
+          "matchingColumns": [
+            "last_status_at"
+          ],
+          "schema": [
+            {
+              "id": "team_id",
+              "displayName": "team_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "team_name",
+              "displayName": "team_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_level",
+              "displayName": "risk_level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_status_at",
+              "displayName": "last_status_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_chat_id",
+              "displayName": "lead_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_url",
+              "displayName": "repo_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_name",
+              "displayName": "repo_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "repo_owner",
+              "displayName": "repo_owner",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        720,
+        -112
+      ],
+      "id": "2b85a7ec-db4e-4697-ab47-2073d5eafcdb",
+      "name": "Update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkDU3RWigSLPUM6d",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Get row(s) in sheet').item.json.lead_chat_id }}",
+        "text": "=«Нет коммитов за 24ч по команде » {{ $('Get row(s) in sheet').item.json.team_name }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        -112
+      ],
+      "id": "7836a21f-75cd-4210-aba3-34622a70440b",
+      "name": "Send a text message",
+      "webhookId": "cbc649ac-80be-40b5-a960-bb59b40f44ac",
+      "credentials": {
+        "telegramApi": {
+          "id": "ORgEnpRvUguh7BWL",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        []
+      ]
+    },
+    "Update row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6dd23325-95f7-4190-842a-ecc7109d4f43",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a63d642a7df8650546e6c6b13cf0cf149584650024e6049dfd4298614cd208f9"
+  },
+  "id": "JAmSdlYhFkO5bcYJ",
+  "tags": []
+}
